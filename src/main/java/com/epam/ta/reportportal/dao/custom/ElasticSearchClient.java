@@ -1,6 +1,10 @@
 package com.epam.ta.reportportal.dao.custom;
 
 import com.epam.ta.reportportal.entity.log.LogMessage;
+import java.util.HashMap;
+import java.util.List;
+import java.util.Map;
+import java.util.Set;
 import org.json.JSONObject;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -8,143 +12,179 @@ import org.springframework.beans.factory.annotation.Value;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
 import org.springframework.http.HttpEntity;
 import org.springframework.http.HttpHeaders;
+import org.springframework.http.HttpStatus;
 import org.springframework.http.MediaType;
+import org.springframework.http.ResponseEntity;
 import org.springframework.http.client.support.BasicAuthenticationInterceptor;
 import org.springframework.stereotype.Service;
 import org.springframework.util.CollectionUtils;
 import org.springframework.web.client.RestTemplate;
 
-import java.util.HashMap;
-import java.util.List;
-import java.util.Map;
-import java.util.Set;
-
 /**
  * Simple client to work with Elasticsearch.
+ *
  * @author <a href="mailto:maksim_antonov@epam.com">Maksim Antonov</a>
  */
 @Service
 @ConditionalOnProperty(prefix = "rp.elasticsearch", name = "host")
 public class ElasticSearchClient {
-    public static final String INDEX_PREFIX = "logs-reportportal-";
-    public static final String CREATE_COMMAND = "{\"create\":{ }}\n";
-    protected final Logger LOGGER = LoggerFactory.getLogger(ElasticSearchClient.class);
+  public static final String INDEX_PREFIX = "logs-reportportal-";
+  public static final String CREATE_COMMAND = "{\"create\":{ }}\n";
+  protected final Logger LOGGER = LoggerFactory.getLogger(ElasticSearchClient.class);
 
-    private final String host;
-    private final RestTemplate restTemplate;
+  private final String host;
+  private final RestTemplate restTemplate;
 
-    public ElasticSearchClient(@Value("${rp.elasticsearch.host}") String host,
-                                     @Value("${rp.elasticsearch.username}") String username,
-                                     @Value("${rp.elasticsearch.password}") String password) {
-        restTemplate = new RestTemplate();
-        restTemplate.getInterceptors().add(new BasicAuthenticationInterceptor(username, password));
+  public ElasticSearchClient(@Value("${rp.elasticsearch.host}") String host,
+      @Value("${rp.elasticsearch.username}") String username,
+      @Value("${rp.elasticsearch.password}") String password) {
+    restTemplate = new RestTemplate();
+    restTemplate.getInterceptors().add(new BasicAuthenticationInterceptor(username, password));
 
-        this.host = host;
+    this.host = host;
+  }
+
+  public void save(List<LogMessage> logMessageList) {
+      if (CollectionUtils.isEmpty(logMessageList)) {
+          return;
+      }
+    Map<String, String> logsByIndex = new HashMap<>();
+
+    logMessageList.forEach(logMessage -> {
+      String indexName = getIndexName(logMessage.getProjectId());
+      String logCreateBody = CREATE_COMMAND + convertToJson(logMessage) + "\n";
+
+      if (logsByIndex.containsKey(indexName)) {
+        logsByIndex.put(indexName, logsByIndex.get(indexName) + logCreateBody);
+      } else {
+        logsByIndex.put(indexName, logCreateBody);
+      }
+    });
+
+    logsByIndex.forEach((indexName, body) -> {
+      restTemplate.put(host + "/" + indexName + "/_bulk?refresh", getStringHttpEntity(body));
+    });
+  }
+
+  public void deleteLogsByLogIdAndProjectId(Long projectId, Long logId) {
+    JSONObject terms = new JSONObject();
+    terms.put("id", List.of(logId));
+
+    deleteLogsByTermsAndProjectId(projectId, terms);
+  }
+
+  public void deleteLogsByItemSetAndProjectId(Long projectId, Set<Long> itemIds) {
+    JSONObject terms = new JSONObject();
+    terms.put("itemId", itemIds);
+
+    deleteLogsByTermsAndProjectId(projectId, terms);
+  }
+
+  public void deleteLogsByLaunchIdAndProjectId(Long projectId, Long launchId) {
+    JSONObject terms = new JSONObject();
+    terms.put("launchId", List.of(launchId));
+
+    deleteLogsByTermsAndProjectId(projectId, terms);
+  }
+
+  public void updateLogsLaunchIdByLaunchIdAndProjectId(List<Long> oldLaunchIds, Long newLaunchId,
+      Long projectId) {
+    String indexName = "logs-reportportal-" + projectId;
+    if (CollectionUtils.isEmpty(oldLaunchIds)) {
+      return;
     }
+    oldLaunchIds.forEach(launchId -> {
+      String logUpdateBody = getUpdateLaunchIdJson(launchId, newLaunchId).toString();
 
-    public void save(List<LogMessage> logMessageList) {
-        if (CollectionUtils.isEmpty(logMessageList)) return;
-        Map<String, String> logsByIndex = new HashMap<>();
+      ResponseEntity<String> response =
+          restTemplate.postForEntity(host + "/" + indexName + "/_update_by_query",
+              getStringHttpEntity(logUpdateBody), String.class
+          );
+      if (response.getStatusCode() != HttpStatus.OK) {
+        LOGGER.info("Update of launchIds in ES error");
+      }
+    });
+  }
 
-        logMessageList.forEach(logMessage -> {
-            String indexName = getIndexName(logMessage.getProjectId());
-            String logCreateBody = CREATE_COMMAND + convertToJson(logMessage) + "\n";
+  public void deleteLogsByLaunchListAndProjectId(Long projectId, List<Long> launches) {
+    JSONObject terms = new JSONObject();
+    terms.put("launchId", launches);
 
-            if (logsByIndex.containsKey(indexName)) {
-                logsByIndex.put(indexName, logsByIndex.get(indexName) + logCreateBody);
-            } else {
-                logsByIndex.put(indexName, logCreateBody);
-            }
-        });
+    deleteLogsByTermsAndProjectId(projectId, terms);
+  }
 
-        logsByIndex.forEach((indexName, body) -> {
-            restTemplate.put(host + "/" + indexName + "/_bulk?refresh", getStringHttpEntity(body));
-        });
+  public void deleteLogsByProjectId(Long projectId) {
+    String indexName = getIndexName(projectId);
+    try {
+      restTemplate.delete(host + "/_data_stream/" + indexName);
+    } catch (Exception exception) {
+      // to avoid checking of exists stream or not
+      LOGGER.error("DELETE stream from ES " + indexName + " Project: " + projectId + " Message: "
+          + exception.getMessage());
     }
+  }
 
-    public void deleteLogsByLogIdAndProjectId(Long projectId, Long logId) {
-        JSONObject terms = new JSONObject();
-        terms.put("id", List.of(logId));
+  private void deleteLogsByTermsAndProjectId(Long projectId, JSONObject terms) {
+    String indexName = getIndexName(projectId);
+    try {
+      JSONObject deleteByLaunch = getDeleteJson(terms);
+      HttpEntity<String> deleteRequest = getStringHttpEntity(deleteByLaunch.toString());
 
-        deleteLogsByTermsAndProjectId(projectId, terms);
+      restTemplate.postForObject(
+          host + "/" + indexName + "/_delete_by_query", deleteRequest, JSONObject.class);
+    } catch (Exception exception) {
+      // to avoid checking of exists stream or not
+      LOGGER.error(
+          "DELETE logs from stream ES error " + indexName + " Terms: " + terms + " Message: "
+              + exception.getMessage());
     }
+  }
 
-    public void deleteLogsByItemSetAndProjectId(Long projectId, Set<Long> itemIds) {
-        JSONObject terms = new JSONObject();
-        terms.put("itemId", itemIds);
+  private String getIndexName(Long projectId) {
+    return INDEX_PREFIX + projectId;
+  }
 
-        deleteLogsByTermsAndProjectId(projectId, terms);
-    }
+  private JSONObject getDeleteJson(JSONObject terms) {
+    JSONObject query = new JSONObject();
+    query.put("terms", terms);
 
-    public void deleteLogsByLaunchIdAndProjectId(Long projectId, Long launchId) {
-        JSONObject terms = new JSONObject();
-        terms.put("launchId", List.of(launchId));
+    JSONObject deleteByLaunch = new JSONObject();
+    deleteByLaunch.put("query", query);
 
-        deleteLogsByTermsAndProjectId(projectId, terms);
-    }
+    return deleteByLaunch;
+  }
 
-    public void deleteLogsByLaunchListAndProjectId(Long projectId, List<Long> launches) {
-        JSONObject terms = new JSONObject();
-        terms.put("launchId", launches);
+  private JSONObject getUpdateLaunchIdJson(Long oldLaunchId, Long newLaunchId) {
+    JSONObject body = new JSONObject();
+    body.put("script", "ctx._source.launchId = " + newLaunchId);
 
-        deleteLogsByTermsAndProjectId(projectId, terms);
-    }
+    JSONObject term = new JSONObject();
+    term.put("launchId", oldLaunchId);
 
-    public void deleteLogsByProjectId(Long projectId) {
-        String indexName = getIndexName(projectId);
-        try {
-            restTemplate.delete(host + "/_data_stream/" + indexName);
-        } catch (Exception exception) {
-            // to avoid checking of exists stream or not
-            LOGGER.error("DELETE stream from ES " + indexName + " Project: " + projectId
-                    + " Message: " + exception.getMessage());
-        }
-    }
+    JSONObject query = new JSONObject();
+    query.put("term", term);
 
-    private void deleteLogsByTermsAndProjectId(Long projectId, JSONObject terms) {
-        String indexName = getIndexName(projectId);
-        try {
-            JSONObject deleteByLaunch = getDeleteJson(terms);
-            HttpEntity<String> deleteRequest = getStringHttpEntity(deleteByLaunch.toString());
+    body.put("query", query);
 
-            restTemplate.postForObject(host + "/" + indexName + "/_delete_by_query", deleteRequest, JSONObject.class);
-        } catch (Exception exception) {
-            // to avoid checking of exists stream or not
-            LOGGER.error("DELETE logs from stream ES error " + indexName + " Terms: " + terms
-                    + " Message: " + exception.getMessage());
-        }
-    }
+    return body;
+  }
 
-    private String getIndexName(Long projectId) {
-        return INDEX_PREFIX + projectId;
-    }
+  private JSONObject convertToJson(LogMessage logMessage) {
+    JSONObject personJsonObject = new JSONObject();
+    personJsonObject.put("id", logMessage.getId());
+    personJsonObject.put("message", logMessage.getLogMessage());
+    personJsonObject.put("itemId", logMessage.getItemId());
+    personJsonObject.put("@timestamp", logMessage.getLogTime());
+    personJsonObject.put("launchId", logMessage.getLaunchId());
 
-    private JSONObject getDeleteJson(JSONObject terms) {
-        JSONObject query = new JSONObject();
-        query.put("terms", terms);
+    return personJsonObject;
+  }
 
-        JSONObject deleteByLaunch = new JSONObject();
-        deleteByLaunch.put("query", query);
+  private HttpEntity<String> getStringHttpEntity(String body) {
+    HttpHeaders headers = new HttpHeaders();
+    headers.setContentType(MediaType.APPLICATION_JSON);
 
-        return deleteByLaunch;
-    }
-
-    private JSONObject convertToJson(LogMessage logMessage) {
-        JSONObject personJsonObject = new JSONObject();
-        personJsonObject.put("id", logMessage.getId());
-        personJsonObject.put("message", logMessage.getLogMessage());
-        personJsonObject.put("itemId", logMessage.getItemId());
-        personJsonObject.put("@timestamp", logMessage.getLogTime());
-        personJsonObject.put("launchId", logMessage.getLaunchId());
-
-        return personJsonObject;
-    }
-
-    private HttpEntity<String> getStringHttpEntity(String body) {
-        HttpHeaders headers = new HttpHeaders();
-        headers.setContentType(MediaType.APPLICATION_JSON);
-
-        return new HttpEntity<>(body, headers);
-    }
+    return new HttpEntity<>(body, headers);
+  }
 
 }
