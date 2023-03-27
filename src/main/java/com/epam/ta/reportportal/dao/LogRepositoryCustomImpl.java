@@ -357,13 +357,7 @@ public class LogRepositoryCustomImpl implements LogRepositoryCustom {
       boolean excludeLogs, Queryable filter,
       Pageable pageable) {
 
-    SortField<Object> sorting = pageable.getSort()
-        .stream()
-        .filter(order -> CRITERIA_LOG_TIME.equals(order.getProperty()))
-        .findFirst()
-        .filter(order -> !order.isAscending())
-        .map(order -> field(TIME).sort(SortOrder.DESC))
-        .orElseGet(() -> field(TIME).sort(SortOrder.ASC));
+    SortField<Object> sorting = getSorting(pageable);
 
     SelectOrderByStep<Record4<Long, Timestamp, String, Integer>> selectQuery = buildNestedStepQuery(
         parentId, excludeEmptySteps, filter);
@@ -383,17 +377,25 @@ public class LogRepositoryCustomImpl implements LogRepositoryCustom {
   }
 
   @Override
+  public List<NestedItem> findNestedTestItems(Long parentId, boolean excludeEmptySteps,
+      Queryable filter, Pageable pageable) {
+    SortField<Object> sorting = getSorting(pageable);
+
+    SelectOrderByStep<Record4<Long, Timestamp, String, Integer>> selectQuery =
+        buildNestedStepQuery(parentId, excludeEmptySteps, filter);
+
+    return NESTED_ITEM_FETCHER.apply(dsl.fetch(
+        selectQuery.orderBy(sorting, field(ID).sort(sorting.getOrder()))
+            .limit(pageable.getPageSize())
+            .offset(QueryBuilder.retrieveOffsetAndApplyBoundaries(pageable))));
+  }
+
+  @Override
   public List<NestedItemPage> findNestedItemsWithPage(Long parentId, boolean excludeEmptySteps,
       boolean excludeLogs,
       Queryable filter, Pageable pageable) {
 
-    SortField<Object> sorting = pageable.getSort()
-        .stream()
-        .filter(order -> CRITERIA_LOG_TIME.equals(order.getProperty()))
-        .findFirst()
-        .filter(order -> !order.isAscending())
-        .map(order -> field(TIME).sort(SortOrder.DESC))
-        .orElseGet(() -> field(TIME).sort(SortOrder.ASC));
+    SortField<Object> sorting = getSorting(pageable);
 
     SelectOrderByStep<Record4<Long, Timestamp, String, Integer>> selectQuery = buildNestedStepQuery(
         parentId, excludeEmptySteps, filter);
@@ -534,6 +536,12 @@ public class LogRepositoryCustomImpl implements LogRepositoryCustom {
     return nestedStepSelect.groupBy(TEST_ITEM.ITEM_ID);
   }
 
+  private SortField<Object> getSorting(Pageable pageable) {
+    return pageable.getSort().stream()
+        .filter(order -> CRITERIA_LOG_TIME.equals(order.getProperty())).findFirst()
+        .filter(order -> !order.isAscending()).map(order -> field(TIME).sort(SortOrder.DESC))
+        .orElseGet(() -> field(TIME).sort(SortOrder.ASC));
+  }
   private SelectOnConditionStep<Record4<Long, Timestamp, String, Integer>> buildNestedLogQuery(
       Long parentId, Queryable filter) {
 

@@ -183,6 +183,19 @@ public interface LogRepositoryCustom extends FilterableRepository<Log> {
       Queryable filter, Pageable pageable);
 
   /**
+   * Retrieve {@link com.epam.ta.reportportal.entity.item.TestItem} entities' ids by parentId
+   *
+   * @param parentId          {@link com.epam.ta.reportportal.entity.item.TestItem#itemId} of the
+   *                          parent item
+   * @param excludeEmptySteps Exclude steps without content (logs and child items)
+   * @param filter            {@link Queryable}
+   * @param pageable          {@link Pageable}
+   * @return {@link List} with {@link NestedItem} as content
+   */
+  List<NestedItem> findNestedTestItems(Long parentId, boolean excludeEmptySteps,
+      Queryable filter, Pageable pageable);
+
+  /**
    * Retrieve {@link Log} and {@link com.epam.ta.reportportal.entity.item.TestItem} entities' ids,
    * differentiated by entity type
    * <p>
