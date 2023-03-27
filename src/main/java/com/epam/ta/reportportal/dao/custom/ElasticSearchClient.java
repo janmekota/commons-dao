@@ -109,8 +109,8 @@ public class ElasticSearchClient {
       restTemplate.delete(host + "/_data_stream/" + indexName);
     } catch (Exception exception) {
       // to avoid checking of exists stream or not
-      LOGGER.error("DELETE stream from ES " + indexName + " Project: " + projectId
-          + " Message: " + exception.getMessage());
+      LOGGER.error("DELETE stream from ES " + indexName + " Project: " + projectId + " Message: "
+          + exception.getMessage());
     }
   }
 
@@ -157,6 +157,17 @@ public class ElasticSearchClient {
     return searchTestItemIdsByConditions(projectId, searchJson);
   }
 
+  public List<Long> searchLogIdsByLogIdsAndString(Long projectId, Collection<Long> logIds,
+      String string) {
+    JSONObject filterTerms = new JSONObject();
+    filterTerms.put("id", logIds);
+    List<String> sourceFields = List.of("id");
+
+    JSONObject searchJson = getSearchStringJson(string, filterTerms, sourceFields, logIds.size());
+
+    return searchTestItemIdsByConditions(projectId, searchJson);
+  }
+
   /**
    * Search LogIds by logIds and conditions. LogIds instead of logs was used due to optimization.
    *
@@ -165,35 +176,54 @@ public class ElasticSearchClient {
    * @return
    */
   private List<Long> searchTestItemIdsByConditions(Long projectId, JSONObject searchJson) {
-    String indexName = getIndexName(projectId);
-
     Set<Long> testItemIds = new HashSet<>();
+
+    List<LinkedHashMap<String, Object>> hits = getResultsFromElastic(projectId, searchJson);
+
+    if (org.apache.commons.collections.CollectionUtils.isNotEmpty(hits)) {
+      for (LinkedHashMap<String, Object> hit : hits) {
+        Map<String, Object> source = (Map<String, Object>) hit.get("_source");
+        Long testItemId = ((Integer) source.get("itemId")).longValue();
+        testItemIds.add(testItemId);
+      }
+
+    }
+    return new ArrayList<>(testItemIds);
+  }
+
+  private List<Long> searchLogIdsByConditions(Long projectId, JSONObject searchJson) {
+
+    List<Long> logIds = new ArrayList<>();
+    List<LinkedHashMap<String, Object>> hits = getResultsFromElastic(projectId, searchJson);
+    if (org.apache.commons.collections.CollectionUtils.isNotEmpty(hits)) {
+      for (LinkedHashMap<String, Object> hit : hits) {
+        Map<String, Object> source = (Map<String, Object>) hit.get("_source");
+        Long testItemId = ((Integer) source.get("id")).longValue();
+        logIds.add(testItemId);
+      }
+    }
+    return logIds;
+  }
+
+  private List<LinkedHashMap<String, Object>> getResultsFromElastic(Long projectId,
+      JSONObject searchJson) {
+    String indexName = getIndexName(projectId);
 
     try {
       HttpEntity<String> searchRequest = getStringHttpEntity(searchJson.toString());
 
-      LinkedHashMap<String, Object> result = restTemplate.postForObject(
-          host + "/" + indexName + "/_search", searchRequest, LinkedHashMap.class);
+      LinkedHashMap<String, Object> result =
+          restTemplate.postForObject(host + "/" + indexName + "/_search", searchRequest,
+              LinkedHashMap.class
+          );
 
-      List<LinkedHashMap<String, Object>> hits = (List<LinkedHashMap<String, Object>>) ((LinkedHashMap<String, Object>) result.get(
+      return (List<LinkedHashMap<String, Object>>) ((LinkedHashMap<String, Object>) result.get(
           "hits")).get("hits");
-
-      if (org.apache.commons.collections.CollectionUtils.isNotEmpty(hits)) {
-        for (LinkedHashMap<String, Object> hit : hits) {
-          Map<String, Object> source = (Map<String, Object>) hit.get("_source");
-          Long testItemId = ((Integer) source.get("itemId")).longValue();
-          testItemIds.add(testItemId);
-        }
-
-      }
-
     } catch (Exception exception) {
-      LOGGER.error("Search error " + indexName
-          + " SearchJson: " + searchJson
-          + " Message: " + exception.getMessage());
+      LOGGER.error("Search error " + indexName + " SearchJson: " + searchJson + " Message: "
+          + exception.getMessage());
     }
-
-    return new ArrayList<>(testItemIds);
+    return new ArrayList<>();
   }
 
   private Map<Long, LogMessage> getLogMessageMapBatch(Long projectId, List<Long> logIds,
@@ -208,11 +238,14 @@ public class ElasticSearchClient {
       JSONObject searchJson = getSearchJson(terms, size);
       HttpEntity<String> searchRequest = getStringHttpEntity(searchJson.toString());
 
-      LinkedHashMap<String, Object> result = restTemplate.postForObject(
-          host + "/" + indexName + "/_search", searchRequest, LinkedHashMap.class);
+      LinkedHashMap<String, Object> result =
+          restTemplate.postForObject(host + "/" + indexName + "/_search", searchRequest,
+              LinkedHashMap.class
+          );
 
-      List<LinkedHashMap<String, Object>> hits = (List<LinkedHashMap<String, Object>>) ((LinkedHashMap<String, Object>) result.get(
-          "hits")).get("hits");
+      List<LinkedHashMap<String, Object>> hits =
+          (List<LinkedHashMap<String, Object>>) ((LinkedHashMap<String, Object>) result.get(
+              "hits")).get("hits");
 
       if (org.apache.commons.collections.CollectionUtils.isNotEmpty(hits)) {
         for (LinkedHashMap<String, Object> hit : hits) {
@@ -224,8 +257,8 @@ public class ElasticSearchClient {
       }
 
     } catch (Exception exception) {
-      LOGGER.error("Search error " + indexName + " Terms: " + terms
-          + " Message: " + exception.getMessage());
+      LOGGER.error(
+          "Search error " + indexName + " Terms: " + terms + " Message: " + exception.getMessage());
     }
 
     return logMessageMap;
@@ -242,16 +275,10 @@ public class ElasticSearchClient {
       timestampString += "." + "0".repeat(6);
     }
 
-    return new LogMessage(
-        ((Integer) source.get("id")).longValue(),
-        LocalDateTime.parse(
-            timestampString,
-            DateTimeFormatter.ofPattern(ELASTIC_DATETIME_FORMAT)
-        ),
-        (String) source.get("message"),
-        ((Integer) source.get("itemId")).longValue(),
-        ((Integer) source.get("launchId")).longValue(),
-        projectId
+    return new LogMessage(((Integer) source.get("id")).longValue(),
+        LocalDateTime.parse(timestampString, DateTimeFormatter.ofPattern(ELASTIC_DATETIME_FORMAT)),
+        (String) source.get("message"), ((Integer) source.get("itemId")).longValue(),
+        ((Integer) source.get("launchId")).longValue(), projectId
     );
   }
 
@@ -262,11 +289,13 @@ public class ElasticSearchClient {
       HttpEntity<String> deleteRequest = getStringHttpEntity(deleteByLaunch.toString());
 
       restTemplate.postForObject(host + "/" + indexName + "/_delete_by_query", deleteRequest,
-          JSONObject.class);
+          JSONObject.class
+      );
     } catch (Exception exception) {
       // to avoid checking of exists stream or not
-      LOGGER.error("DELETE logs from stream ES error " + indexName + " Terms: " + terms
-          + " Message: " + exception.getMessage());
+      LOGGER.error(
+          "DELETE logs from stream ES error " + indexName + " Terms: " + terms + " Message: "
+              + exception.getMessage());
     }
   }
 
@@ -294,7 +323,6 @@ public class ElasticSearchClient {
 
     return searchJson;
   }
-
 
   private JSONObject getSearchStringJson(String string, JSONObject filterTerms,
       List<String> sourceFields, Integer size) {
