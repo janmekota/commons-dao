@@ -37,6 +37,9 @@ public interface TestItemRepository extends ReportPortalRepository<TestItem, Lon
   @Query(value = "SELECT * FROM test_item WHERE item_id = (SELECT parent_id FROM test_item WHERE item_id = :childId)", nativeQuery = true)
   Optional<TestItem> findParentByChildId(@Param("childId") Long childId);
 
+  @Query(value = "SELECT item_id FROM test_item WHERE parent_id = :parentId", nativeQuery = true)
+  List<Long> findChildIdByParentId(@Param("parentId") Long parentId);
+
   /**
    * Retrieve list of test item ids for provided launch
    *

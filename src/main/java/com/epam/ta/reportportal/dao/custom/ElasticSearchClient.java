@@ -12,6 +12,7 @@ import java.util.List;
 import java.util.Map;
 import java.util.Set;
 import org.apache.commons.collections.MapUtils;
+import org.json.JSONArray;
 import org.json.JSONObject;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -157,15 +158,13 @@ public class ElasticSearchClient {
     return searchTestItemIdsByConditions(projectId, searchJson);
   }
 
-  public List<Long> searchLogIdsByLogIdsAndString(Long projectId, Collection<Long> logIds,
-      String string) {
-    JSONObject filterTerms = new JSONObject();
-    filterTerms.put("id", logIds);
+  public Map<Long, List<Long>> searchTestItemAndLogIdsByLogIdsAndString(Long projectId,
+      List<Long> testItemIds, String string) {
     List<String> sourceFields = List.of("id");
 
-    JSONObject searchJson = getSearchStringJson(string, filterTerms, sourceFields, logIds.size());
+    JSONObject searchJson = getLogSearchJson(string, testItemIds, sourceFields);
 
-    return searchTestItemIdsByConditions(projectId, searchJson);
+    return searchTestItemAndLogIdsByConditions(projectId, searchJson);
   }
 
   /**
@@ -191,18 +190,25 @@ public class ElasticSearchClient {
     return new ArrayList<>(testItemIds);
   }
 
-  private List<Long> searchLogIdsByConditions(Long projectId, JSONObject searchJson) {
+  private Map<Long, List<Long>> searchTestItemAndLogIdsByConditions(Long projectId,
+      JSONObject searchJson) {
 
-    List<Long> logIds = new ArrayList<>();
+    Map<Long, List<Long>> testItemIdLogIdMap = new HashMap<>();
     List<LinkedHashMap<String, Object>> hits = getResultsFromElastic(projectId, searchJson);
     if (org.apache.commons.collections.CollectionUtils.isNotEmpty(hits)) {
       for (LinkedHashMap<String, Object> hit : hits) {
         Map<String, Object> source = (Map<String, Object>) hit.get("_source");
-        Long testItemId = ((Integer) source.get("id")).longValue();
-        logIds.add(testItemId);
+        Long testItemId = ((Integer) source.get("itemId")).longValue();
+        Long logId = ((Integer) source.get("id")).longValue();
+        if (testItemIdLogIdMap.containsKey(testItemId)) {
+          List<Long> logIds = testItemIdLogIdMap.get(testItemId);
+          logIds.add(logId);
+        } else {
+          testItemIdLogIdMap.put(testItemId, List.of(logId));
+        }
       }
     }
-    return logIds;
+    return testItemIdLogIdMap;
   }
 
   private List<LinkedHashMap<String, Object>> getResultsFromElastic(Long projectId,
@@ -340,6 +346,30 @@ public class ElasticSearchClient {
     searchJson.put("query", query);
     searchJson.put("post_filter", postFilter);
     searchJson.put("size", size);
+
+    return searchJson;
+  }
+
+  private JSONObject getLogSearchJson(String string, List<Long> testItemIds,
+      List<String> sourceFields) {
+    JSONObject query = new JSONObject();
+
+    JSONObject matchPhrase = new JSONObject();
+    matchPhrase.put(LOG_MESSAGE_FIELD_NAME, string);
+    JSONObject terms = new JSONObject();
+    terms.put("itemId", testItemIds);
+
+    JSONObject bool = new JSONObject();
+    JSONArray must = new JSONArray();
+    must.put(matchPhrase);
+    must.put(terms);
+
+    bool.put("must", must);
+    query.put("query", bool);
+
+    JSONObject searchJson = new JSONObject();
+    searchJson.put("_source", sourceFields);
+    searchJson.put("query", query);
 
     return searchJson;
   }
