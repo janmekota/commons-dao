@@ -31,14 +31,20 @@ import org.springframework.data.repository.query.Param;
 /**
  * @author Pavel Bortnik
  */
-public interface TestItemRepository extends ReportPortalRepository<TestItem, Long>,
-    TestItemRepositoryCustom {
+public interface TestItemRepository
+    extends ReportPortalRepository<TestItem, Long>, TestItemRepositoryCustom {
 
   @Query(value = "SELECT * FROM test_item WHERE item_id = (SELECT parent_id FROM test_item WHERE item_id = :childId)", nativeQuery = true)
   Optional<TestItem> findParentByChildId(@Param("childId") Long childId);
 
   @Query(value = "SELECT item_id FROM test_item WHERE parent_id = :parentId", nativeQuery = true)
   List<Long> findChildIdByParentId(@Param("parentId") Long parentId);
+
+  @Query(value = "SELECT item_id FROM test_item JOIN test_item_results "
+      + "ON test_item.item_id = test_item_results.result_id "
+      + "WHERE parent_id = :parentId AND status = :status", nativeQuery = true)
+  List<Long> findChildIdByParentIdAndStatus(@Param("parentId") Long parentId,
+      @Param("status") String status);
 
   /**
    * Retrieve list of test item ids for provided launch
@@ -64,8 +70,8 @@ public interface TestItemRepository extends ReportPortalRepository<TestItem, Lon
           + " WHERE test_item.launch_id = :launchId AND NOT test_item.has_children "
           + " AND result.status = CAST(:#{#status.name()} AS STATUS_ENUM) ORDER BY test_item.item_id LIMIT :pageSize OFFSET :pageOffset", nativeQuery = true)
   List<Long> findIdsByNotHasChildrenAndLaunchIdAndStatus(@Param("launchId") Long launchId,
-      @Param("status") StatusEnum status,
-      @Param("pageSize") Integer limit, @Param("pageOffset") Long offset);
+      @Param("status") StatusEnum status, @Param("pageSize") Integer limit,
+      @Param("pageOffset") Long offset);
 
   /**
    * Retrieve the {@link List} of the {@link TestItem#getItemId()} by launch ID,
@@ -83,9 +89,8 @@ public interface TestItemRepository extends ReportPortalRepository<TestItem, Lon
           + " WHERE test_item.launch_id = :launchId AND test_item.has_children AND result.status = CAST(:#{#status.name()} AS STATUS_ENUM)"
           + " ORDER BY nlevel(test_item.path) DESC, test_item.item_id LIMIT :pageSize OFFSET :pageOffset", nativeQuery = true)
   List<Long> findIdsByHasChildrenAndLaunchIdAndStatusOrderedByPathLevel(
-      @Param("launchId") Long launchId,
-      @Param("status") StatusEnum status, @Param("pageSize") Integer limit,
-      @Param("pageOffset") Long offset);
+      @Param("launchId") Long launchId, @Param("status") StatusEnum status,
+      @Param("pageSize") Integer limit, @Param("pageOffset") Long offset);
 
   /**
    * Retrieve the {@link Stream} of the {@link TestItem#getItemId()} under parent
@@ -101,8 +106,8 @@ public interface TestItemRepository extends ReportPortalRepository<TestItem, Lon
           + " WHERE CAST(:parentPath AS LTREE) @> test_item.path AND CAST(:parentPath AS LTREE) != test_item.path "
           + " AND NOT test_item.has_children AND result.status = CAST(:#{#status.name()} AS STATUS_ENUM) ORDER BY test_item.item_id LIMIT :pageSize OFFSET :pageOffset", nativeQuery = true)
   List<Long> findIdsByNotHasChildrenAndParentPathAndStatus(@Param("parentPath") String parentPath,
-      @Param("status") StatusEnum status,
-      @Param("pageSize") Integer limit, @Param("pageOffset") Long offset);
+      @Param("status") StatusEnum status, @Param("pageSize") Integer limit,
+      @Param("pageOffset") Long offset);
 
   /**
    * Retrieve the {@link Stream} of the {@link TestItem#getItemId()} under parent
@@ -121,9 +126,8 @@ public interface TestItemRepository extends ReportPortalRepository<TestItem, Lon
           + " AND test_item.has_children AND result.status = CAST(:#{#status.name()} AS STATUS_ENUM)"
           + " ORDER BY nlevel(test_item.path) DESC, test_item.item_id LIMIT :pageSize OFFSET :pageOffset", nativeQuery = true)
   List<Long> findIdsByHasChildrenAndParentPathAndStatusOrderedByPathLevel(
-      @Param("parentPath") String parentPath,
-      @Param("status") StatusEnum status, @Param("pageSize") Integer limit,
-      @Param("pageOffset") Long offset);
+      @Param("parentPath") String parentPath, @Param("status") StatusEnum status,
+      @Param("pageSize") Integer limit, @Param("pageOffset") Long offset);
 
   List<TestItem> findTestItemsByUniqueId(String uniqueId);
 
@@ -240,8 +244,7 @@ public interface TestItemRepository extends ReportPortalRepository<TestItem, Lon
       "SELECT EXISTS(SELECT 1 FROM test_item ti JOIN test_item_results tir ON ti.item_id = tir.result_id"
           + " WHERE ti.path <@ CAST(:parentPath AS LTREE) AND ti.item_id != :parentId AND CAST(tir.status AS VARCHAR) IN (:statuses))", nativeQuery = true)
   boolean hasItemsInStatusByParent(@Param("parentId") Long parentId,
-      @Param("parentPath") String parentPath,
-      @Param("statuses") String... statuses);
+      @Param("parentPath") String parentPath, @Param("statuses") String... statuses);
 
   /**
    * True if the launch has any items with issue.
@@ -279,8 +282,7 @@ public interface TestItemRepository extends ReportPortalRepository<TestItem, Lon
           + " WHERE test_item.parent_id = :parentId AND test_item.item_id != :stepId AND test_item.retry_of IS NULL "
           + " AND CAST(result.status AS VARCHAR) NOT IN (:statuses))", nativeQuery = true)
   boolean hasDescendantsNotInStatusExcludingById(@Param("parentId") Long parentId,
-      @Param("stepId") Long stepId,
-      @Param("statuses") String... statuses);
+      @Param("stepId") Long stepId, @Param("statuses") String... statuses);
 
   /**
    * Finds {@link TestItem} with specified {@code path}
@@ -305,8 +307,7 @@ public interface TestItemRepository extends ReportPortalRepository<TestItem, Lon
           + " AND t.parent_id = :parentId AND t.has_stats AND t.retry_of IS NULL"
           + " ORDER BY t.start_time DESC, t.item_id DESC LIMIT 1 FOR UPDATE", nativeQuery = true)
   Optional<Long> findLatestIdByUniqueIdAndLaunchIdAndParentId(@Param("uniqueId") String uniqueId,
-      @Param("launchId") Long launchId,
-      @Param("parentId") Long parentId);
+      @Param("launchId") Long launchId, @Param("parentId") Long parentId);
 
   /**
    * Finds latest {@link TestItem#getItemId()} with specified {@code uniqueId}, {@code launchId},
@@ -323,9 +324,8 @@ public interface TestItemRepository extends ReportPortalRepository<TestItem, Lon
           + " AND t.parent_id = :parentId AND t.item_id != :itemId AND t.has_stats AND t.retry_of IS NULL"
           + " ORDER BY t.start_time DESC, t.item_id DESC LIMIT 1 FOR UPDATE", nativeQuery = true)
   Optional<Long> findLatestIdByUniqueIdAndLaunchIdAndParentIdAndItemIdNotEqual(
-      @Param("uniqueId") String uniqueId,
-      @Param("launchId") Long launchId, @Param("parentId") Long parentId,
-      @Param("itemId") Long itemId);
+      @Param("uniqueId") String uniqueId, @Param("launchId") Long launchId,
+      @Param("parentId") Long parentId, @Param("itemId") Long itemId);
 
   /**
    * Finds all descendants ids of {@link TestItem} with {@code path} include its own id
@@ -351,8 +351,7 @@ public interface TestItemRepository extends ReportPortalRepository<TestItem, Lon
       "SELECT t.item_id FROM test_item t WHERE t.test_case_hash = :testCaseHash AND t.launch_id = :launchId AND t.parent_id IS NULL "
           + " ORDER BY t.start_time DESC, t.item_id DESC LIMIT 1 FOR UPDATE", nativeQuery = true)
   Optional<Long> findLatestIdByTestCaseHashAndLaunchIdWithoutParents(
-      @Param("testCaseHash") Integer testCaseHash,
-      @Param("launchId") Long launchId);
+      @Param("testCaseHash") Integer testCaseHash, @Param("launchId") Long launchId);
 
   /**
    * Finds latest {@link TestItem#getItemId()} with specified {@code testCaseHash}, {@code launchId}
@@ -369,8 +368,8 @@ public interface TestItemRepository extends ReportPortalRepository<TestItem, Lon
           + " AND t.parent_id = :parentId AND t.has_stats AND t.retry_of IS NULL"
           + " ORDER BY t.start_time DESC, t.item_id DESC LIMIT 1 FOR UPDATE", nativeQuery = true)
   Optional<Long> findLatestIdByTestCaseHashAndLaunchIdAndParentId(
-      @Param("testCaseHash") Integer testCaseHash,
-      @Param("launchId") Long launchId, @Param("parentId") Long parentId);
+      @Param("testCaseHash") Integer testCaseHash, @Param("launchId") Long launchId,
+      @Param("parentId") Long parentId);
 
   /**
    * Count items by launch id

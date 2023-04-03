@@ -38,6 +38,10 @@ public interface LogRepository extends ReportPortalRepository<Log, Long>, LogRep
 
   long countLogsByLaunchId(Long launchId);
 
+  @Query(value = "SELECT id FROM log WHERE attachment_id IS NOT NULL AND id IN (:logIds)",
+      nativeQuery = true)
+  List<Long> findLogsByHasAttachment(@Param("logIds")List<Long> logIds);
+
   @Modifying
   @Query(value = "UPDATE log SET launch_id = :newLaunchId WHERE launch_id = :currentLaunchId", nativeQuery = true)
   void updateLaunchIdByLaunchId(@Param("currentLaunchId") Long currentLaunchId,

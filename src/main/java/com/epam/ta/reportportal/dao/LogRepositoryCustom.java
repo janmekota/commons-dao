@@ -229,7 +229,7 @@ public interface LogRepositoryCustom extends FilterableRepository<Log> {
       String path, Integer level);
 
   /**
-   * Retrieves log message id of specified test item with log level greather or equals than
+   * Retrieves log message id of specified test item with log level greater or equals than
    * {@code level}
    *
    * @param launchId @link TestItem#getLaunchId()}
@@ -240,6 +240,15 @@ public interface LogRepositoryCustom extends FilterableRepository<Log> {
    */
   List<Long> findIdsByLaunchIdAndItemIdAndPathAndLevelGte(Long launchId, Long itemId, String path,
       Integer level);
+
+  /**
+   * Retrieves ids of {@link TestItem}, which contains log id from {@code logIds}
+   *
+   * @param logIds      Nested log ids
+   * @param testItemIds {@link  List} of identifiers from which to search
+   * @return {@link  List} of {@link TestItem}
+   */
+  List<Long> findTestItemIdsByNestedLogIds(List<Long> logIds, List<Long> testItemIds);
 
   int deleteByProjectId(Long projectId);
 }
