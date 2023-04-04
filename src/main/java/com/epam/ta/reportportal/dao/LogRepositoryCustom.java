@@ -250,5 +250,16 @@ public interface LogRepositoryCustom extends FilterableRepository<Log> {
    */
   List<Long> findTestItemIdsByNestedLogIds(List<Long> logIds, List<Long> testItemIds);
 
+  /**
+   * Returns the page of {@link NestedItem} by {@link TestItem} ids and {@link Log} ids
+   * and {@link Pageable} parameters
+   * @param testItemIds {@link List} of {@link TestItem} ids
+   * @param logIds {@link List} of {@link Log} ids
+   * @param pageable Parameters for {@link Page} to return
+   * @return {@link Page} of {@link NestedItem}
+   */
+  Page<NestedItem> getPageWithNestedItemsByTestItemIdsAndLogIds(List<Long> testItemIds,
+      List<Long> logIds, Pageable pageable);
+
   int deleteByProjectId(Long projectId);
 }
