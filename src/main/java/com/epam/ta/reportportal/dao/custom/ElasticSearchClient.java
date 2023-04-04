@@ -354,18 +354,22 @@ public class ElasticSearchClient {
       List<String> sourceFields) {
     JSONObject query = new JSONObject();
 
-    JSONObject matchPhrase = new JSONObject();
-    matchPhrase.put(LOG_MESSAGE_FIELD_NAME, string);
+    JSONObject wildcard = new JSONObject();
+    wildcard.put(LOG_MESSAGE_FIELD_NAME, "*" + string + "*");
     JSONObject terms = new JSONObject();
     terms.put("itemId", testItemIds);
 
-    JSONObject bool = new JSONObject();
-    JSONArray must = new JSONArray();
-    must.put(matchPhrase);
-    must.put(terms);
+    JSONObject filter = new JSONObject();
+    filter.put("terms", terms);
 
+    JSONObject must = new JSONObject();
+    must.put("wildcard", wildcard);
+
+    JSONObject bool = new JSONObject();
     bool.put("must", must);
-    query.put("query", bool);
+    bool.put("filter",filter);
+
+    query.put("bool", bool);
 
     JSONObject searchJson = new JSONObject();
     searchJson.put("_source", sourceFields);
