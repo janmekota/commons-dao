@@ -474,14 +474,25 @@ public class LogRepositoryCustomImpl implements LogRepositoryCustom {
   private SelectOrderByStep<Record4<Long, Timestamp, String, Integer>> selectNestedItemsByTestItemIdsAndLogIds(
       List<Long> testItems, List<Long> logIds) {
 
+    if (testItems == null){
+      testItems = new ArrayList<>();
+    }
+
+    if (logIds == null){
+      logIds = new ArrayList<>();
+    }
+
+    SelectConditionStep<Record4<Long, Timestamp, String, Integer>> testItemQuery =
+        dsl.select(TEST_ITEM.ITEM_ID.as(ID), TEST_ITEM.START_TIME.as(TIME), DSL.val(ITEM).as(TYPE),
+            DSL.val(0).as(LOG_LEVEL)
+        ).from(TEST_ITEM).where(TEST_ITEM.ITEM_ID.in(testItems));
+
     SelectConditionStep<Record4<Long, Timestamp, String, Integer>> logQuery =
         dsl.select(LOG.ID.as(ID), LOG.LOG_TIME.as(TIME),
             DSL.val(LogRepositoryConstants.LOG).as(TYPE), LOG.LOG_LEVEL
         ).from(LOG).where(LOG.ID.in(logIds));
 
-    return dsl.select(TEST_ITEM.ITEM_ID.as(ID), TEST_ITEM.START_TIME.as(TIME),
-        DSL.val(ITEM).as(TYPE), DSL.val(0).as(LOG_LEVEL)
-    ).from(TEST_ITEM).where(TEST_ITEM.ITEM_ID.in(testItems)).unionAll(logQuery);
+    return testItemQuery.unionAll(logQuery);
   }
 
   private SortField<Object> getSorting(Pageable pageable) {

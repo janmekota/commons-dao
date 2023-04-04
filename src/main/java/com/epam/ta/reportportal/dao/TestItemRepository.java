@@ -37,13 +37,11 @@ public interface TestItemRepository
   @Query(value = "SELECT * FROM test_item WHERE item_id = (SELECT parent_id FROM test_item WHERE item_id = :childId)", nativeQuery = true)
   Optional<TestItem> findParentByChildId(@Param("childId") Long childId);
 
-  @Query(value = "SELECT item_id FROM test_item WHERE parent_id = :parentId", nativeQuery = true)
-  List<Long> findChildIdByParentId(@Param("parentId") Long parentId);
-
-  @Query(value = "SELECT item_id FROM test_item JOIN test_item_results "
-      + "ON test_item.item_id = test_item_results.result_id "
-      + "WHERE parent_id = :parentId AND status = :status", nativeQuery = true)
-  List<Long> findChildIdByParentIdAndStatus(@Param("parentId") Long parentId,
+  @Query(value = "SELECT item_id " + "FROM test_item "
+      + "JOIN test_item_results tir ON test_item.item_id = tir.result_id "
+      + "WHERE path <@ (SELECT path FROM test_item WHERE item_id = :parentId) "
+      + "AND tir.status = :status", nativeQuery = true)
+  List<Long> findAllDescendantIdsByParentIdAndStatus(@Param("parentId") Long parentId,
       @Param("status") String status);
 
   /**
