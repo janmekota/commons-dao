@@ -160,7 +160,7 @@ public class ElasticSearchClient {
 
   public Map<Long, List<Long>> searchTestItemAndLogIdsByLogIdsAndString(Long projectId,
       List<Long> testItemIds, String string) {
-    List<String> sourceFields = List.of("id");
+    List<String> sourceFields = List.of("id", "itemId");
 
     JSONObject searchJson = getLogSearchJson(string, testItemIds, sourceFields);
 
