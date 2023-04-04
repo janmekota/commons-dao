@@ -388,15 +388,16 @@ public class LogRepositoryCustomImpl implements LogRepositoryCustom {
   }
 
   @Override
-  public List<Long> findTestItemIdsByNestedLogIds(List<Long> logIds, List<Long> testItemIds) {
+  public List<Long> findTestItemIdsByNestedLogIds(List<Long> logIds, Long parentId) {
 
-    Table<Record1<Object>> child_ti =
+    Table<Record1<Object>> childPathTi =
         dsl.select(TEST_ITEM.PATH).from(TEST_ITEM).join(LOG).on(TEST_ITEM.ITEM_ID.eq(LOG.ITEM_ID))
-            .where(LOG.ID.in(logIds)).asTable("child_ti");
+            .where(LOG.ID.in(logIds)).asTable("child_path_ti");
 
-    return dsl.select(TEST_ITEM.ITEM_ID).from(TEST_ITEM).rightJoin(child_ti)
-        .on(DSL.sql(child_ti.field("path") + " <@ " + TEST_ITEM.PATH))
-        .where(TEST_ITEM.ITEM_ID.in(testItemIds)).fetch(TEST_ITEM.ITEM_ID);
+    return dsl.select(TEST_ITEM.ITEM_ID).from(TEST_ITEM).rightJoin(childPathTi)
+        .on(DSL.sql(childPathTi.field("path") + " <@ " + TEST_ITEM.PATH))
+        .where(TEST_ITEM.ITEM_ID.in(dsl.select(TEST_ITEM.ITEM_ID).from(TEST_ITEM)
+            .where(TEST_ITEM.PARENT_ID.eq(parentId)))).fetch(TEST_ITEM.ITEM_ID);
   }
 
   @Override

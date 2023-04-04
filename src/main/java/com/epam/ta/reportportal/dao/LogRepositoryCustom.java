@@ -82,8 +82,7 @@ public interface LogRepositoryCustom extends FilterableRepository<Log> {
    * @return {@link List} of {@link Log}
    */
   Map<Long, List<IndexLog>> findAllIndexUnderTestItemByLaunchIdAndTestItemIdsAndLogLevelGte(
-      Long launchId, List<Long> itemIds,
-      int logLevel);
+      Long launchId, List<Long> itemIds, int logLevel);
 
   /**
    * Find n latest logs for item
@@ -192,8 +191,8 @@ public interface LogRepositoryCustom extends FilterableRepository<Log> {
    * @param pageable          {@link Pageable}
    * @return {@link List} with {@link NestedItem} as content
    */
-  List<NestedItem> findNestedTestItems(Long parentId, boolean excludeEmptySteps,
-      Queryable filter, Pageable pageable);
+  List<NestedItem> findNestedTestItems(Long parentId, boolean excludeEmptySteps, Queryable filter,
+      Pageable pageable);
 
   /**
    * Retrieve {@link Log} and {@link com.epam.ta.reportportal.entity.item.TestItem} entities' ids,
@@ -212,8 +211,7 @@ public interface LogRepositoryCustom extends FilterableRepository<Log> {
    * @return {@link Page} with {@link NestedItemPage} as content
    */
   List<NestedItemPage> findNestedItemsWithPage(Long parentId, boolean excludeEmptySteps,
-      boolean excludeLogs,
-      Queryable filter, Pageable pageable);
+      boolean excludeLogs, Queryable filter, Pageable pageable);
 
   /**
    * Retrieves log message of specified test item with log level greather or equals than
@@ -244,18 +242,19 @@ public interface LogRepositoryCustom extends FilterableRepository<Log> {
   /**
    * Retrieves ids of {@link TestItem}, which contains log id from {@code logIds}
    *
-   * @param logIds      Nested log ids
-   * @param testItemIds {@link  List} of identifiers from which to search
+   * @param logIds   Nested log ids
+   * @param parentId Identifier of parent test item
    * @return {@link  List} of {@link TestItem}
    */
-  List<Long> findTestItemIdsByNestedLogIds(List<Long> logIds, List<Long> testItemIds);
+  List<Long> findTestItemIdsByNestedLogIds(List<Long> logIds, Long parentId);
 
   /**
    * Returns the page of {@link NestedItem} by {@link TestItem} ids and {@link Log} ids
    * and {@link Pageable} parameters
+   *
    * @param testItemIds {@link List} of {@link TestItem} ids
-   * @param logIds {@link List} of {@link Log} ids
-   * @param pageable Parameters for {@link Page} to return
+   * @param logIds      {@link List} of {@link Log} ids
+   * @param pageable    Parameters for {@link Page} to return
    * @return {@link Page} of {@link NestedItem}
    */
   Page<NestedItem> getPageWithNestedItemsByTestItemIdsAndLogIds(List<Long> testItemIds,
