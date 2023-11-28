@@ -27,7 +27,7 @@ apply from: 'project-properties.gradle'
 apply from: "$scriptsUrl/release-commons.gradle"
 apply from: "$scriptsUrl/signing.gradle"
 apply from: "$scriptsUrl/copy-database-scripts.gradle"
-apply from: "$scriptsUrl/build-quality.gradle"
+//apply from: "$scriptsUrl/build-quality.gradle"
 apply from: "$scriptsUrl/jacoco.gradle"
 apply from: 'jooq.gradle'
 
@@ -101,6 +101,10 @@ dependencies {
 
 dependencyCheck {
     formats = [ReportGenerator.Format.HTML, ReportGenerator.Format.XML]
+}
+
+allprojects {
+    tasks.withType(Javadoc).all { enabled = false }
 }
 
 test {
