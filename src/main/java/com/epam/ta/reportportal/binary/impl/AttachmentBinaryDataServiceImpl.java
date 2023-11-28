@@ -131,7 +131,20 @@ public class AttachmentBinaryDataServiceImpl implements AttachmentBinaryDataServ
 			attachment.setItemId(attachmentMetaInfo.getItemId());
 			attachment.setCreationDate(attachmentMetaInfo.getCreationDate());
 
-			createLogAttachmentService.create(attachment, attachmentMetaInfo.getLogId());
+			final int MAX_TRIES = 4;
+			int count = 0;
+			while (count++ <= MAX_TRIES) {
+				try {
+					createLogAttachmentService.create(attachment, attachmentMetaInfo.getLogId());
+					break;
+				} catch (Exception exception) {
+					if (count == MAX_TRIES) {
+						LOGGER.info("Log creation retry limit reached, throwing exception. ItemID '{}' ", attachmentMetaInfo.getItemId());
+						throw exception;
+					}
+					LOGGER.info("Re-trying to create a log");
+				}
+			}
 		} catch (Exception exception) {
 			LOGGER.error("Cannot save log to database, remove files ", exception);
 
