@@ -133,11 +133,10 @@ public class AttachmentBinaryDataServiceImpl implements AttachmentBinaryDataServ
 
 			createLogAttachmentService.create(attachment, attachmentMetaInfo.getLogId());
 		} catch (Exception exception) {
-			LOGGER.error("Cannot save log to database, remove files ", exception);
+			LOGGER.info("Cannot save log to database, remove files ", exception);
 
 			dataStoreService.delete(binaryDataMetaInfo.getFileId());
 			dataStoreService.delete(binaryDataMetaInfo.getThumbnailFileId());
-			throw exception;
 		}
 	}
 
